@@ -95,8 +95,10 @@ jobs:
           fetch-depth: 1
           path: upstream
 
-      - name: Apply container packaging compatibility patch
-        run: git apply ../packaging/patches/container-pnpm.patch
+      - name: Apply Linux build patches
+        run: |
+          git apply ../packaging/patches/container-pnpm.patch
+          git apply ../packaging/patches/destroyed-webcontents.patch
 
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0

@@ -1,0 +1,123 @@
+diff --git a/apps/desktop/src/main/runtime.ts b/apps/desktop/src/main/runtime.ts
+index ddc1e67..5291ff0 100644
+--- a/apps/desktop/src/main/runtime.ts
++++ b/apps/desktop/src/main/runtime.ts
+@@ -39,6 +39,25 @@ export type PathValidationResult =
+   | { ok: true; resolved: string }
+   | { ok: false; reason: string };
+ 
++export type WebContentsUrlSurface = {
++  getURL: () => string;
++  isDestroyed: () => boolean;
++};
++
++/**
++ * Reads the current renderer URL only while Electron still considers the
++ * WebContents usable. Destruction can race the check, so getURL itself must
++ * remain inside the guard as well.
++ */
++export function getLiveWebContentsUrl(webContents: WebContentsUrlSurface): string | null {
++  if (webContents.isDestroyed()) return null;
++  try {
++    return webContents.getURL();
++  } catch {
++    return null;
++  }
++}
++
+ /**
+  * Validates that a path points at an existing absolute directory
+  * that is *not* a macOS application bundle. Returns the
+@@ -1824,6 +1843,8 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
+     },
+     width: 1280,
+   });
++  const mainWebContents = window.webContents;
++  const currentWebContentsUrl = () => getLiveWebContentsUrl(mainWebContents);
+   installWindowChromeCssHook(window);
+   showWindowButtons(window);
+   attachDownloadSaveAsDialog(window);
+@@ -1834,19 +1855,19 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
+   window.webContents.on("did-start-loading", () => {
+     console.info("[open-design desktop] main window did-start-loading", {
+       pendingUrl,
+-      url: window.webContents.getURL(),
++      url: currentWebContentsUrl(),
+     });
+   });
+   window.webContents.on("dom-ready", () => {
+     console.info("[open-design desktop] main window dom-ready", {
+-      title: window.getTitle(),
+-      url: window.webContents.getURL(),
++      title: window.isDestroyed() ? null : window.getTitle(),
++      url: currentWebContentsUrl(),
+     });
+   });
+   window.webContents.on("did-finish-load", () => {
+     console.info("[open-design desktop] main window did-finish-load", {
+-      title: window.getTitle(),
+-      url: window.webContents.getURL(),
++      title: window.isDestroyed() ? null : window.getTitle(),
++      url: currentWebContentsUrl(),
+     });
+   });
+   window.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+@@ -1856,19 +1877,19 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
+       isMainFrame,
+       pendingUrl,
+       validatedURL,
+-      url: window.webContents.getURL(),
++      url: currentWebContentsUrl(),
+     });
+   });
+   window.on("unresponsive", () => {
+     console.error("[open-design desktop] main window unresponsive", {
+       pendingUrl,
+-      url: window.webContents.getURL(),
++      url: currentWebContentsUrl(),
+     });
+   });
+   window.on("responsive", () => {
+     console.info("[open-design desktop] main window responsive", {
+       pendingUrl,
+-      url: window.webContents.getURL(),
++      url: currentWebContentsUrl(),
+     });
+   });
+ 
+@@ -1883,7 +1904,7 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
+     console.error("[open-design desktop] main window render-process-gone", {
+       exitCode: details.exitCode,
+       reason: details.reason,
+-      url: window.webContents.getURL(),
++      url: currentWebContentsUrl(),
+     });
+     void reportRendererCrash(options, {
+       reason: details.reason,
+@@ -2347,7 +2368,7 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
+       console.info("[open-design desktop] eval executeJavaScript start", {
+         ...summarizeExpression(input.expression),
+         statusUrl: resolveDesktopStatusUrl(currentUrl, pendingUrl),
+-        webContentsUrl: window.webContents.getURL(),
++        webContentsUrl: currentWebContentsUrl(),
+       });
+       try {
+         const value = await window.webContents.executeJavaScript(input.expression, true);
+@@ -2355,7 +2376,7 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
+           durationMs: Date.now() - startedAt,
+           statusUrl: resolveDesktopStatusUrl(currentUrl, pendingUrl),
+           valueType: typeof value,
+-          webContentsUrl: window.webContents.getURL(),
++          webContentsUrl: currentWebContentsUrl(),
+         });
+         return { ok: true, value };
+       } catch (error) {
+@@ -2363,7 +2384,7 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
+           durationMs: Date.now() - startedAt,
+           error: error instanceof Error ? error.message : String(error),
+           statusUrl: resolveDesktopStatusUrl(currentUrl, pendingUrl),
+-          webContentsUrl: window.webContents.getURL(),
++          webContentsUrl: currentWebContentsUrl(),
+         });
+         return { error: error instanceof Error ? error.message : String(error), ok: false };
+       }

@@ -5,7 +5,7 @@ Unofficial, automated Linux AppImage builds of
 
 This repository does not fork Open Design product code. GitHub Actions checks
 the upstream project for a new stable release, checks out the exact upstream
-tag, applies the small packaging-only patch under `patches/`, and runs the
+tag, applies the Linux build patches under `patches/`, and runs the
 upstream `tools-pack` Linux packaging command.
 
 ## Download
