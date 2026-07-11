@@ -32,7 +32,8 @@ The `Build Linux AppImage` workflow runs:
 
 The build uses the upstream containerized packaging lane to target an older
 glibc baseline. The patch passes the already bootstrapped pnpm binary into
-nested build commands and enables non-interactive CI behavior; it does not
+nested workspace builds, exposes Node's bundled npm for the final production
+dependency assembly, and enables non-interactive CI behavior; it does not
 change the application. GitHub Actions dependencies are pinned to commit
 hashes. Each Release contains the AppImage, a SHA-256 checksum, and provenance
 metadata recording the upstream tag and commit.
