@@ -3,9 +3,10 @@
 Unofficial, automated Linux AppImage builds of
 [`nexu-io/open-design`](https://github.com/nexu-io/open-design).
 
-This repository contains no modified Open Design source code. GitHub Actions
-checks the upstream project for a new stable release, checks out the exact
-upstream tag, and runs the upstream `tools-pack` Linux packaging command.
+This repository does not fork Open Design product code. GitHub Actions checks
+the upstream project for a new stable release, checks out the exact upstream
+tag, applies the small packaging-only patch under `patches/`, and runs the
+upstream `tools-pack` Linux packaging command.
 
 ## Download
 
@@ -30,9 +31,11 @@ The `Build Linux AppImage` workflow runs:
   published here, unless `force_rebuild` is selected.
 
 The build uses the upstream containerized packaging lane to target an older
-glibc baseline. GitHub Actions dependencies are pinned to commit hashes. Each
-Release contains the AppImage, a SHA-256 checksum, and provenance metadata
-recording the upstream tag and commit.
+glibc baseline. The patch passes the already bootstrapped pnpm binary into
+nested build commands and enables non-interactive CI behavior; it does not
+change the application. GitHub Actions dependencies are pinned to commit
+hashes. Each Release contains the AppImage, a SHA-256 checksum, and provenance
+metadata recording the upstream tag and commit.
 
 ## Trust and support
 
