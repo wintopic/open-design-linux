@@ -2,7 +2,15 @@ diff --git a/tools/pack/src/linux.ts b/tools/pack/src/linux.ts
 index ed33aa1..b9e7bbb 100644
 --- a/tools/pack/src/linux.ts
 +++ b/tools/pack/src/linux.ts
-@@ -214,6 +214,10 @@ export function buildDockerArgs(
+@@ -173,6 +173,7 @@ export function buildDockerArgs(
+     `echo "$PNPM_SHA256  ${CONTAINER_PNPM_PATH}.tmp" | sha256sum -c - && ` +
+     `mv ${CONTAINER_PNPM_PATH}.tmp ${CONTAINER_PNPM_PATH} && ` +
+     `chmod +x ${CONTAINER_PNPM_PATH} && ` +
++    `ln -sf ${CONTAINER_PNPM_PATH} ${CONTAINER_PNPM_HOME}/pnpm && ` +
+     `PNPM_HOME=${CONTAINER_PNPM_HOME} PATH=${CONTAINER_PNPM_HOME}:$PATH ${CONTAINER_PNPM_PATH} env use --global ${CONTAINER_NODE_VERSION} && ` +
+     `export PNPM_HOME=${CONTAINER_PNPM_HOME} PATH=${CONTAINER_PNPM_HOME}:$PATH && ` +
+     `command -v node >/dev/null`;
+@@ -214,6 +215,10 @@ export function buildDockerArgs(
      "ELECTRON_CACHE=/home/builder/.cache/electron",
      "-e",
      "ELECTRON_BUILDER_CACHE=/home/builder/.cache/electron-builder",
@@ -13,7 +21,7 @@ index ed33aa1..b9e7bbb 100644
      "-e",
      `${PRODUCTION_INSTALL_PNPM_BIN_ENV}=${CONTAINER_PNPM_PATH}`,
    ];
-@@ -499,6 +503,7 @@ async function writeAssembledApp(
+@@ -499,6 +504,7 @@ async function writeAssembledApp(
      private: true,
      main: "main.cjs",
      dependencies,
