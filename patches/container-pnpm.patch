@@ -1,31 +1,44 @@
 diff --git a/tools/pack/src/linux.ts b/tools/pack/src/linux.ts
-index ed33aa1..b9e7bbb 100644
+index ed33aa1..4957055 100644
 --- a/tools/pack/src/linux.ts
 +++ b/tools/pack/src/linux.ts
-@@ -173,6 +173,7 @@ export function buildDockerArgs(
+@@ -173,9 +173,11 @@ export function buildDockerArgs(
      `echo "$PNPM_SHA256  ${CONTAINER_PNPM_PATH}.tmp" | sha256sum -c - && ` +
      `mv ${CONTAINER_PNPM_PATH}.tmp ${CONTAINER_PNPM_PATH} && ` +
      `chmod +x ${CONTAINER_PNPM_PATH} && ` +
 +    `ln -sf ${CONTAINER_PNPM_PATH} ${CONTAINER_PNPM_HOME}/pnpm && ` +
      `PNPM_HOME=${CONTAINER_PNPM_HOME} PATH=${CONTAINER_PNPM_HOME}:$PATH ${CONTAINER_PNPM_PATH} env use --global ${CONTAINER_NODE_VERSION} && ` +
      `export PNPM_HOME=${CONTAINER_PNPM_HOME} PATH=${CONTAINER_PNPM_HOME}:$PATH && ` +
-     `command -v node >/dev/null`;
-@@ -214,6 +215,10 @@ export function buildDockerArgs(
+-    `command -v node >/dev/null`;
++    `${CONTAINER_PNPM_PATH} add --global npm@11.18.0 && ` +
++    `command -v node >/dev/null && command -v npm >/dev/null`;
+   const pnpmCmd = CONTAINER_PNPM_PATH;
+   const innerArgs = [
+     `node ${CONTAINER_TOOLS_PACK_CLI_PATH} linux build`,
+@@ -214,8 +216,10 @@ export function buildDockerArgs(
      "ELECTRON_CACHE=/home/builder/.cache/electron",
      "-e",
      "ELECTRON_BUILDER_CACHE=/home/builder/.cache/electron-builder",
-+    "-e",
+     "-e",
+-    `${PRODUCTION_INSTALL_PNPM_BIN_ENV}=${CONTAINER_PNPM_PATH}`,
 +    "CI=true",
 +    "-e",
 +    `npm_execpath=${CONTAINER_PNPM_PATH}`,
-     "-e",
-     `${PRODUCTION_INSTALL_PNPM_BIN_ENV}=${CONTAINER_PNPM_PATH}`,
    ];
-@@ -499,6 +504,7 @@ async function writeAssembledApp(
+   if (config.telemetryRelayUrl != null) {
+     dockerArgs.push("-e", `OPEN_DESIGN_TELEMETRY_RELAY_URL=${config.telemetryRelayUrl}`);
+@@ -374,5 +378,5 @@ export function resolveProductionInstallCommand(env: NodeJS.ProcessEnv): Produc
+       args: ["install", "--prod", "--no-lockfile", "--config.node-linker=hoisted"],
+     };
+   }
+-  return { command: "npm", args: ["install", "--omit=dev", "--no-package-lock"] };
++  return { command: "npm", args: ["install", "--omit=dev"] };
+ }
+@@ -498,6 +502,7 @@ async function writeAssembledApp(
+     version: packageVersion,
      private: true,
      main: "main.cjs",
++    packageManager: "npm@11.18.0",
      dependencies,
-+    pnpm: { overrides: dependencies },
      description: "Local-first design product: detects your installed code-agent CLI, runs design skills + design systems, streams artifacts into a sandboxed preview.",
      author: "Open Design Team",
-     repository: {

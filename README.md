@@ -32,12 +32,11 @@ The `Build Linux AppImage` workflow runs:
 
 The build uses the upstream containerized packaging lane to target an older
 glibc baseline. The patch exposes the already bootstrapped pnpm binary to
-nested workspace and Electron Builder commands, maps unpublished internal
-packages to the tarballs built from the checked-out source, and enables
-non-interactive CI behavior; it does not change the application. GitHub Actions
-dependencies are pinned to commit hashes. Each Release contains the AppImage,
-a SHA-256 checksum, and provenance metadata recording the upstream tag and
-commit.
+nested workspace and Electron Builder commands, installs a pinned npm for the
+final flat production dependency assembly, and enables non-interactive CI
+behavior; it does not change the application. GitHub Actions dependencies are
+pinned to commit hashes. Each Release contains the AppImage, a SHA-256
+checksum, and provenance metadata recording the upstream tag and commit.
 
 ## Trust and support
 
