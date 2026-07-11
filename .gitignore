@@ -1,0 +1,4 @@
+.DS_Store
+*.AppImage
+*.sha256
+build-metadata.json

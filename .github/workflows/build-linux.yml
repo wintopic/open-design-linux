@@ -1,0 +1,181 @@
+name: Build Linux AppImage
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: Upstream tag, branch, or commit; empty means latest stable release
+        required: false
+        type: string
+      force_rebuild:
+        description: Rebuild even if this repository already has a matching Release
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: open-design-linux-${{ github.event.inputs.upstream_ref || 'latest-stable' }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve upstream version
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.resolve.outputs.should_build }}
+      upstream_ref: ${{ steps.resolve.outputs.upstream_ref }}
+      upstream_tag: ${{ steps.resolve.outputs.upstream_tag }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Resolve requested upstream ref
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_FORCE_REBUILD: ${{ github.event.inputs.force_rebuild || 'false' }}
+          INPUT_UPSTREAM_REF: ${{ github.event.inputs.upstream_ref || '' }}
+        run: |
+          set -euo pipefail
+
+          requested_ref="${INPUT_UPSTREAM_REF}"
+          if [[ -z "${requested_ref}" ]]; then
+            requested_ref="$(gh api repos/nexu-io/open-design/releases/latest --jq .tag_name)"
+          fi
+
+          if [[ "${requested_ref}" == open-design-v* ]]; then
+            upstream_tag="${requested_ref}"
+            version="${requested_ref#open-design-v}"
+          else
+            upstream_tag=""
+            version="manual-$(date -u +%Y%m%d)-${GITHUB_RUN_ID}"
+          fi
+
+          should_build=true
+          if [[ -n "${upstream_tag}" && "${INPUT_FORCE_REBUILD}" != true ]]; then
+            if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${upstream_tag}" >/dev/null 2>&1; then
+              should_build=false
+            fi
+          fi
+
+          {
+            echo "should_build=${should_build}"
+            echo "upstream_ref=${requested_ref}"
+            echo "upstream_tag=${upstream_tag}"
+            echo "version=${version}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Explain skipped build
+        if: steps.resolve.outputs.should_build != 'true'
+        run: echo "A Release for ${{ steps.resolve.outputs.upstream_tag }} already exists."
+
+  build:
+    name: Build x86_64 AppImage
+    needs: resolve
+    if: needs.resolve.outputs.should_build == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out upstream source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: nexu-io/open-design
+          ref: ${{ needs.resolve.outputs.upstream_ref }}
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 10.33.2
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build AppImage with upstream packager
+        env:
+          APP_VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          pnpm exec tools-pack linux build \
+            --dir "${RUNNER_TEMP}/tools-pack" \
+            --namespace release-linux \
+            --portable \
+            --app-version "${APP_VERSION}" \
+            --to appimage \
+            --containerized \
+            --json
+
+      - name: Collect artifact and provenance
+        id: artifact
+        env:
+          UPSTREAM_REF: ${{ needs.resolve.outputs.upstream_ref }}
+          UPSTREAM_TAG: ${{ needs.resolve.outputs.upstream_tag }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          source_path="$(find "${RUNNER_TEMP}/tools-pack" -type f -name '*.AppImage' -print -quit)"
+          if [[ -z "${source_path}" ]]; then
+            echo "No AppImage was produced" >&2
+            exit 1
+          fi
+
+          artifact_name="open-design-${VERSION}-linux-x86_64.AppImage"
+          install -m 0755 "${source_path}" "dist/${artifact_name}"
+          (cd dist && sha256sum "${artifact_name}" > "${artifact_name}.sha256")
+
+          upstream_commit="$(git rev-parse HEAD)"
+          jq -n \
+            --arg repository "nexu-io/open-design" \
+            --arg ref "${UPSTREAM_REF}" \
+            --arg tag "${UPSTREAM_TAG}" \
+            --arg commit "${upstream_commit}" \
+            --arg version "${VERSION}" \
+            --arg workflow_run "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            '{upstream:{repository:$repository,ref:$ref,tag:$tag,commit:$commit},version:$version,workflowRun:$workflow_run}' \
+            > dist/build-metadata.json
+
+          echo "artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
+          echo "upstream_commit=${upstream_commit}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: open-design-${{ needs.resolve.outputs.version }}-linux-x86_64
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish versioned Release
+        if: needs.resolve.outputs.upstream_tag != ''
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        with:
+          tag_name: ${{ needs.resolve.outputs.upstream_tag }}
+          name: Open Design ${{ needs.resolve.outputs.version }} for Linux
+          prerelease: ${{ contains(needs.resolve.outputs.version, '-') }}
+          generate_release_notes: false
+          body: |
+            Unofficial Linux AppImage built from [`nexu-io/open-design@${{ steps.artifact.outputs.upstream_commit }}`](https://github.com/nexu-io/open-design/commit/${{ steps.artifact.outputs.upstream_commit }}).
+
+            Upstream tag: `${{ needs.resolve.outputs.upstream_tag }}`
+
+            Verify the download with the attached `.sha256` file. Run with:
+
+            ```bash
+            chmod +x ${{ steps.artifact.outputs.artifact_name }}
+            ./${{ steps.artifact.outputs.artifact_name }} --appimage-extract-and-run
+            ```
+          files: |
+            dist/${{ steps.artifact.outputs.artifact_name }}
+            dist/${{ steps.artifact.outputs.artifact_name }}.sha256
+            dist/build-metadata.json
+          fail_on_unmatched_files: true
